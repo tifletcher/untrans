@@ -49,7 +49,7 @@ namespace Untrans
 		private class Options
 		{
 			public string BaseFilename { get; set; }
-			public TargetTypes TargetType { get; set; }
+			public TargetTypes? TargetType { get; set; }
 		}
 
 		private enum TargetTypes
@@ -59,6 +59,10 @@ namespace Untrans
 
 		static void Main(string[] args)
 		{
+
+			#region options and help
+
+			bool showHelp = false;
 			var options = new Options
 			{
 				BaseFilename = @"c:\Users\tfletcher\Porchlight\Main\UI\dist\std\",
@@ -73,10 +77,29 @@ namespace Untrans
 					}
 				},
 				{
-					"UI", _ => options.TargetType = TargetTypes.UI;
+					"UI", _ =>
+					{
+						options.TargetType = TargetTypes.UI;
+					}
+				},
+				{
+					"h|?|help", _ =>
+					{
+						showHelp = true;
+					}
 				}
 			};
 			optionSet.Parse(args);
+
+			if (showHelp || options.BaseFilename == null || options.TargetType == null )
+			{
+				Console.WriteLine("--ui -p|--path=<path to UI after build>");
+				Console.WriteLine("--report Prints a translation report");
+				Console.WriteLine("-o|--output=<filename> Prints a list of untranslated strings to <filename>");
+				Environment.Exit(0);
+			}
+
+			#endregion
 
 			var porchlightStrings = KeyedString.ReadFile<TranslateableString>(options.BaseFilename + Config.EnglishFilename);
 			var germanTranslations = KeyedString.ReadFile<TranslatedString>(options.BaseFilename + Config.GermanFilename);
