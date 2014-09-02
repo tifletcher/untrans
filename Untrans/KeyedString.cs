@@ -22,21 +22,21 @@ namespace Untrans
 
 		public TranslatedString()
 		{
-			Stale = false;
+			Stale = true;
 		}
 	}
 
 	public static class KeyedStringExtension
 	{
-		public static SortedSet<String> ExtractKeys(this SortedSet<KeyedString> inputSet)
+		public static SortedSet<String> ExtractKeys(this Dictionary<String, KeyedString> inputSet)
 		{
 			return KeyedString.ExtractKeys(inputSet);
 		}
-		public static SortedSet<String> ExtractKeys(this SortedSet<TranslatedString> inputSet)
+		public static SortedSet<String> ExtractKeys(this Dictionary<String, TranslatedString> inputSet)
 		{
 			return KeyedString.ExtractKeys(inputSet);
 		}
-		public static SortedSet<String> ExtractKeys(this SortedSet<TranslateableString> inputSet)
+		public static SortedSet<String> ExtractKeys(this Dictionary<String, TranslateableString> inputSet)
 		{
 			return KeyedString.ExtractKeys(inputSet);
 		}
@@ -45,7 +45,7 @@ namespace Untrans
 	public class KeyedString : IComparable
 	{
 		public string Key { get; set; }
-		public string String { set; private get; }
+		public string String { get; set; }
 
 		public int CompareTo(object obj)
 		{
@@ -53,27 +53,28 @@ namespace Untrans
 			return String.Compare(Key, other.Key); // blow up if obj can't be coerced
 		}
 
-		public static SortedSet<T> ReadFile<T>(string filename) where T : KeyedString, new()
+		public static Dictionary<String, T> ReadFile<T>(string filename) where T : KeyedString, new()
 		{
 			var doc = XDocument.Load(filename);
-			var set = new SortedSet<T>();
+			var hash = new Dictionary<string, T>();
 			foreach (var dataNode in doc.Descendants("data"))
 			{
-				set.Add(new T
+				var key = dataNode.Attribute("name").Value;
+				hash.Add(key, new T
 				{
-					Key = dataNode.Attribute("name").Value,
+					Key = key,
 					String = dataNode.Descendants("value").First().Value
 				});
 			}
-			return set;
+			return hash;
 		}
 
-		public static SortedSet<String> ExtractKeys<T>(SortedSet<T> inputSet) where T : KeyedString
+		public static SortedSet<String> ExtractKeys<T>(Dictionary<String, T> inputHash) where T : KeyedString
 		{
 			var outputSet = new SortedSet<String>();
-			foreach (var ks in inputSet)
+			foreach (var el in inputHash)
 			{
-				outputSet.Add(ks.Key);
+				outputSet.Add(el.Key);
 			}
 			return outputSet;
 		}

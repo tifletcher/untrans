@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 using NDesk.Options;
@@ -8,7 +9,7 @@ namespace Untrans
 {
 	internal static class Config
 	{
-		public static string DataPath = "";
+		public static string DataPath = "\\";
 		public static string BaseFilename = "PorchlightStrings";
 		public static string Suffix = "resx";
 		public static string GermanFilename = DataPath + "PorchlightStrings.de.resx";
@@ -19,7 +20,8 @@ namespace Untrans
 			German,
 			French,
 			Japanese,
-			Chinese
+			Chinese,
+			Spanish
 		}
 
 		public class TranslationInfo
@@ -36,11 +38,14 @@ namespace Untrans
 		public static Dictionary<TranslationTargets, TranslationInfo> Translations =
 			new Dictionary<TranslationTargets, TranslationInfo>
 			{
+				{TranslationTargets.Spanish,  new TranslationInfo{ Name="Spanish",  Code="es" }},
 				{TranslationTargets.German,   new TranslationInfo{ Name="German",   Code="de" }},
 				{TranslationTargets.French,   new TranslationInfo{ Name="French",   Code="fr" }},
 				{TranslationTargets.Japanese, new TranslationInfo{ Name="Japanese", Code="ja" }},
 				{TranslationTargets.Chinese,  new TranslationInfo{ Name="Chinese",  Code="zh" }},
 			};
+
+		public static int NumberOfTranslations = Translations.Count();
 	}
 
 
@@ -49,12 +54,7 @@ namespace Untrans
 		private class Options
 		{
 			public string BaseFilename { get; set; }
-			public TargetTypes? TargetType { get; set; }
-		}
-
-		private enum TargetTypes
-		{
-			UI,
+			public bool Report { get; set; }
 		}
 
 		static void Main(string[] args)
@@ -65,8 +65,7 @@ namespace Untrans
 			bool showHelp = false;
 			var options = new Options
 			{
-				BaseFilename = @"c:\Users\tfletcher\Porchlight\Main\UI\dist\std\",
-				TargetType = TargetTypes.UI
+				Report = false,
 			};
 			var optionSet = new OptionSet()
 			{
@@ -77,9 +76,9 @@ namespace Untrans
 					}
 				},
 				{
-					"UI", _ =>
+					"report-only", _ =>
 					{
-						options.TargetType = TargetTypes.UI;
+						options.Report = true;
 					}
 				},
 				{
@@ -91,53 +90,76 @@ namespace Untrans
 			};
 			optionSet.Parse(args);
 
-			if (showHelp || options.BaseFilename == null || options.TargetType == null )
+			if (showHelp || options.BaseFilename == null )
 			{
-				Console.WriteLine("--ui -p|--path=<path to UI after build>");
-				Console.WriteLine("--report Prints a translation report");
-				Console.WriteLine("-o|--output=<filename> Prints a list of untranslated strings to <filename>");
+				Console.WriteLine("-p|--path=<path to directory containing PorchlightStrings.resx");
+				Console.WriteLine("--report-only Prints a translation report instead of listing untranslated strings");
 				Environment.Exit(0);
 			}
 
 			#endregion
 
+			// read in porchlight strings and translations
 			var porchlightStrings = KeyedString.ReadFile<TranslateableString>(options.BaseFilename + Config.EnglishFilename);
-			var germanTranslations = KeyedString.ReadFile<TranslatedString>(options.BaseFilename + Config.GermanFilename);
 
 			var translations =
-				Config.Translations.Aggregate(new Dictionary<Config.TranslationTargets, SortedSet<TranslatedString>>(),
+				Config.Translations.Aggregate(new Dictionary<Config.TranslationTargets, Dictionary<String, TranslatedString>>(),
 					(accumulator, translation) =>
 					{
-						var translationSet = KeyedString.ReadFile<TranslatedString>(
+						var translationHash = KeyedString.ReadFile<TranslatedString>(
 							options.BaseFilename + Config.Translations[translation.Key].Filename
 							);
-						accumulator.Add(translation.Key, translationSet);
+						accumulator.Add(translation.Key, translationHash);
 						return accumulator;
 					});
 
-			Console.Write("All Strings:");
-			Console.WriteLine(porchlightStrings.Count());
 
-			Console.Write("German");
-			Console.WriteLine(germanTranslations.Count());
-
-			var untranslatedStrings =
-				porchlightStrings.Where(translateble => !(germanTranslations.Any(translation => translation.Key == translateble.Key)));
-			Console.WriteLine(untranslatedStrings.Count());
-
-			var TranslatebleKeys = porchlightStrings.ExtractKeys();
-
-			Console.WriteLine("----");
-			foreach (var translation in translations)
+			// mark fully translated strings and non-stale translations
+			foreach (var key in porchlightStrings.ExtractKeys())
 			{
-				Console.Write(Config.Translations[translation.Key].Name + ": ");
-				Console.WriteLine(translation.Value.Count());
+				var translationsFound = new Dictionary<Config.TranslationTargets, bool>();
+
+				foreach (var translation in translations)
+				{
+					if (translation.Value.ContainsKey(key))
+					{
+						translation.Value[key].Stale = false;
+						translationsFound[translation.Key] = true;
+					}
+				}
+
+				if (translationsFound.Count(t => t.Value) == Config.NumberOfTranslations)
+				{
+					porchlightStrings[key].Translated = true;
+				}
 			}
 
+			if (options.Report)
+			{
+				var translateable = porchlightStrings.Count();
+				Console.WriteLine("Total Translateable Strings: " + translateable);
+				Console.WriteLine();
 
+				Console.WriteLine("Untranslated: " + porchlightStrings.Count(s => !s.Value.Translated));
+				Console.WriteLine();
 
+				Console.WriteLine("Stale Keys:");
+				foreach (var translation in translations)
+				{
+					var stale = translation.Value.Where(s => s.Value.Stale);
+					Console.WriteLine("-- {0}: {1} of {2} strings are stale", Config.Translations[translation.Key].Name, stale.Count(),
+						translation.Value.Count());
+				}
+			}
+			else
+			{
+				var untranslatedStrings = porchlightStrings.Where(s => !s.Value.Translated);
+				foreach (var untranslatedString in untranslatedStrings)
+				{
+					Console.WriteLine(untranslatedString.Key + "\t" + untranslatedString.Value.String);
+				}
+			}
 
-			Console.ReadKey();
 		}
 	}
 }
