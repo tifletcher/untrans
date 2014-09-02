@@ -61,7 +61,6 @@ namespace Untrans
 		{
 
 			#region options and help
-
 			bool showHelp = false;
 			var options = new Options
 			{
@@ -96,9 +95,9 @@ namespace Untrans
 				Console.WriteLine("--report-only Prints a translation report instead of listing untranslated strings");
 				Environment.Exit(0);
 			}
-
 			#endregion
 
+			#region read / preen translations
 			// read in porchlight strings and translations
 			var porchlightStrings = KeyedString.ReadFile<TranslateableString>(options.BaseFilename + Config.EnglishFilename);
 
@@ -115,7 +114,7 @@ namespace Untrans
 
 
 			// mark fully translated strings and non-stale translations
-			foreach (var key in porchlightStrings.ExtractKeys())
+			foreach (var key in porchlightStrings.Keys)
 			{
 				var translationsFound = new Dictionary<Config.TranslationTargets, bool>();
 
@@ -133,6 +132,7 @@ namespace Untrans
 					porchlightStrings[key].Translated = true;
 				}
 			}
+			#endregion
 
 			if (options.Report)
 			{
