@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 using NDesk.Options;
 
@@ -23,7 +22,9 @@ namespace Untrans
 			French,
 			Japanese,
 			Chinese,
-			Spanish
+			Spanish,
+			MexicanSpanish,
+			SimplifiedChinese
 		}
 
 		public class TranslationInfo
@@ -45,9 +46,11 @@ namespace Untrans
 				{TranslationTargets.French,   new TranslationInfo{ Name="French",   Code="fr" }},
 				{TranslationTargets.Japanese, new TranslationInfo{ Name="Japanese", Code="ja" }},
 				{TranslationTargets.Chinese,  new TranslationInfo{ Name="Chinese",  Code="zh" }},
-			};
 
-		public static int NumberOfTranslations = Translations.Count();
+				// probably obsolete forever. existed in 1402, gone in 1403
+				{TranslationTargets.MexicanSpanish,  new TranslationInfo{ Name="Mexican Spanish",  Code="es-mx" }},
+				{TranslationTargets.SimplifiedChinese,  new TranslationInfo{ Name="Simplified Chinese",  Code="es-mx" }},
+			};
 	}
 
 
@@ -148,7 +151,7 @@ namespace Untrans
 					}
 				}
 
-				if (translationsFound.Count(t => t.Value) == Config.NumberOfTranslations)
+				if (translationsFound.Count(t => t.Value) == translations.Count)
 				{
 					porchlightStrings[key].Translated = true;
 				}
@@ -157,7 +160,7 @@ namespace Untrans
 
 			if (options.Report)
 			{
-				var translateable = porchlightStrings.Count();
+				var translateable = porchlightStrings.Count;
 				Console.WriteLine("Total Translateable Strings: " + translateable);
 				Console.WriteLine();
 
@@ -165,11 +168,11 @@ namespace Untrans
 				Console.WriteLine();
 
 				Console.WriteLine("Stale Keys:");
-				foreach (var translation in translations)
+				foreach (var translation in translations.OrderBy(t => Config.Translations[t.Key].Name))
 				{
 					var stale = translation.Value.Where(s => s.Value.Stale);
 					Console.WriteLine("-- {0}: {1} of {2} strings are stale", Config.Translations[translation.Key].Name, stale.Count(),
-						translation.Value.Count());
+						translation.Value.Count);
 				}
 			}
 			else
