@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 using NDesk.Options;
+
+using Retchelf;
 
 namespace Untrans
 {
@@ -11,7 +15,6 @@ namespace Untrans
 		public static string DataPath = "\\";
 		public static string BaseFilename = "PorchlightStrings";
 		public static string Suffix = "resx";
-		public static string GermanFilename = DataPath + "PorchlightStrings.de.resx";
 		public static string EnglishFilename = DataPath + BaseFilename + "." + Suffix;
 
 		public enum TranslationTargets
@@ -68,7 +71,7 @@ namespace Untrans
 			var optionSet = new OptionSet()
 			{
 				{
-					"p:|path:", path =>
+					"path:", path =>
 					{
 						if (!String.IsNullOrWhiteSpace(path)) options.BaseFilename = path;
 					}
@@ -88,17 +91,33 @@ namespace Untrans
 			};
 			optionSet.Parse(args);
 
-			if (showHelp || options.BaseFilename == null )
+			if (showHelp || !args.Any() || options.BaseFilename == null)
 			{
-				Console.WriteLine("-p|--path=<path to directory containing PorchlightStrings.resx");
-				Console.WriteLine("--report-only Prints a translation report instead of listing untranslated strings");
+				var help = @" Untrans
+					| Show info about translation staleness or print list of untranlated strings in a porchlight build.
+
+					| Arguments:
+					| --path=<directory containing PorchlightStrings.resx>
+
+					| Options:
+					| --report-only Prints a translation report instead of listing untranslated strings
+					| "
+					.StripMargin();
+
+				Console.Write(help);
 				Environment.Exit(0);
 			}
 			#endregion
 
 			#region read / preen translations
 			// read in porchlight strings and translations
-			var porchlightStrings = KeyedString.ReadFile<TranslateableString>(options.BaseFilename + Config.EnglishFilename);
+			var porchlightStringsPath = options.BaseFilename + Config.EnglishFilename;
+			if (!File.Exists(porchlightStringsPath))
+			{
+				Console.WriteLine(String.Format("\"{0}\" not found. Is this the path to a release build?", porchlightStringsPath));
+				Environment.Exit(0);
+			}
+			var porchlightStrings = KeyedString.ReadFile<TranslateableString>(porchlightStringsPath);
 
 			var translations =
 				Config.Translations.Aggregate(new Dictionary<Config.TranslationTargets, Dictionary<String, TranslatedString>>(),
@@ -107,7 +126,10 @@ namespace Untrans
 						var translationHash = KeyedString.ReadFile<TranslatedString>(
 							options.BaseFilename + Config.Translations[translation.Key].Filename
 							);
-						accumulator.Add(translation.Key, translationHash);
+						if (translationHash != null)
+						{
+							accumulator.Add(translation.Key, translationHash);
+						}
 						return accumulator;
 					});
 

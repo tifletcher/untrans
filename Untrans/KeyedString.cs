@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Xml.Linq;
 
@@ -32,7 +33,16 @@ namespace Untrans
 
 		public static Dictionary<String, T> ReadFile<T>(string filename) where T : KeyedString, new()
 		{
-			var doc = XDocument.Load(filename);
+			System.Xml.Linq.XDocument doc;
+			try
+			{
+				doc = XDocument.Load(filename);
+			}
+			catch (FileNotFoundException)
+			{
+				return null;
+			}
+
 			var hash = new Dictionary<string, T>();
 			foreach (var dataNode in doc.Descendants("data"))
 			{
