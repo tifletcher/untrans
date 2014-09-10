@@ -16,41 +16,30 @@ namespace Untrans
 		public static string Suffix = "resx";
 		public static string EnglishFilename = DataPath + BaseFilename + "." + Suffix;
 
-		public enum TranslationTargets
-		{
-			German,
-			French,
-			Japanese,
-			Chinese,
-			Spanish,
-			MexicanSpanish,
-			SimplifiedChinese
-		}
-
-		public class TranslationInfo
-		{
-			public string Name { get; set; }
-			public string Code { get; set; }
-
-			public string Filename
+		public static HashSet<TranslationInfo> Translations =
+			new HashSet<TranslationInfo>
 			{
-				get { return DataPath + BaseFilename + "." + Code + "." + Suffix; }
-			}
-		}
-
-		public static Dictionary<TranslationTargets, TranslationInfo> Translations =
-			new Dictionary<TranslationTargets, TranslationInfo>
-			{
-				{TranslationTargets.Spanish,  new TranslationInfo{ Name="Spanish",  Code="es" }},
-				{TranslationTargets.German,   new TranslationInfo{ Name="German",   Code="de" }},
-				{TranslationTargets.French,   new TranslationInfo{ Name="French",   Code="fr" }},
-				{TranslationTargets.Japanese, new TranslationInfo{ Name="Japanese", Code="ja" }},
-				{TranslationTargets.Chinese,  new TranslationInfo{ Name="Chinese",  Code="zh" }},
+				{new TranslationInfo{ Name="Spanish",  Code="es" }},
+				{new TranslationInfo{ Name="German",   Code="de" }},
+				{new TranslationInfo{ Name="French",   Code="fr" }},
+				{new TranslationInfo{ Name="Japanese", Code="ja" }},
+				{new TranslationInfo{ Name="Chinese",  Code="zh" }},
 
 				// probably obsolete forever. existed in 1402, gone in 1403
-				{TranslationTargets.MexicanSpanish,  new TranslationInfo{ Name="Mexican Spanish",  Code="es-mx" }},
-				{TranslationTargets.SimplifiedChinese,  new TranslationInfo{ Name="Simplified Chinese",  Code="es-mx" }},
+				{new TranslationInfo{ Name="Mexican Spanish",  Code="es-mx" }},
+				{new TranslationInfo{ Name="Simplified Chinese",  Code="es-mx" }},
 			};
+	}
+
+	public class TranslationInfo
+	{
+		public string Name { get; set; }
+		public string Code { get; set; }
+
+		public string Filename
+		{
+			get { return Config.DataPath + Config.BaseFilename + "." + Code + "." + Config.Suffix; }
+		}
 	}
 
 
@@ -123,35 +112,32 @@ namespace Untrans
 			var porchlightStrings = KeyedString.ReadFile<TranslateableString>(porchlightStringsPath);
 
 			var translations =
-				Config.Translations.Aggregate(new Dictionary<Config.TranslationTargets, Dictionary<String, TranslatedString>>(),
-					(accumulator, translation) =>
+				Config.Translations.Aggregate(new Dictionary<TranslationInfo, Dictionary<String, TranslatedString>>(),
+					(accumulator, translationinfo) =>
 					{
-						var translationHash = KeyedString.ReadFile<TranslatedString>(
-							options.BaseFilename + Config.Translations[translation.Key].Filename
-							);
-						if (translationHash != null)
+						var translationDict = KeyedString.ReadFile<TranslatedString>(options.BaseFilename + translationinfo.Filename);
+						if (translationDict != null)
 						{
-							accumulator.Add(translation.Key, translationHash);
+							accumulator.Add(translationinfo, translationDict);
 						}
 						return accumulator;
 					});
 
-
 			// mark fully translated strings and non-stale translations
 			foreach (var key in porchlightStrings.Keys)
 			{
-				var translationsFound = new Dictionary<Config.TranslationTargets, bool>();
+				int translationsFound = 0;
 
 				foreach (var translation in translations)
 				{
 					if (translation.Value.ContainsKey(key))
 					{
 						translation.Value[key].Stale = false;
-						translationsFound[translation.Key] = true;
+						translationsFound++;
 					}
 				}
 
-				if (translationsFound.Count(t => t.Value) == translations.Count)
+				if (translationsFound == translations.Count)
 				{
 					porchlightStrings[key].Translated = true;
 				}
@@ -168,11 +154,10 @@ namespace Untrans
 				Console.WriteLine();
 
 				Console.WriteLine("Stale Keys:");
-				foreach (var translation in translations.OrderBy(t => Config.Translations[t.Key].Name))
+				foreach (var translation in translations.OrderBy(translationInfo => translationInfo.Key.Name))
 				{
 					var stale = translation.Value.Where(s => s.Value.Stale);
-					Console.WriteLine("-- {0}: {1} of {2} strings are stale", Config.Translations[translation.Key].Name, stale.Count(),
-						translation.Value.Count);
+					Console.WriteLine("-- {0}: {1} of {2} strings are stale", translation.Key.Name, stale.Count(), translation.Value.Count);
 				}
 			}
 			else
