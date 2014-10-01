@@ -168,6 +168,7 @@ namespace Untrans
 			if (options.Report)
 			{
 				Console.WriteLine("Total strings before filtering: " + rawPorchlightStrings.Count);
+				Console.WriteLine("{0} unique ignore expressions found in \"{1}\"", globalIgnore.Count(), options.IgnoreFilePath);
 				Console.WriteLine("Total translateable strings: " + porchlightStrings.Count);
 				Console.WriteLine();
 
