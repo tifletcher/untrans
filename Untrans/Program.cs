@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-
+using System.Text.RegularExpressions;
 using NDesk.Options;
 
 using Retchelf;
@@ -19,15 +19,15 @@ namespace Untrans
 		public static HashSet<TranslationInfo> Translations =
 			new HashSet<TranslationInfo>
 			{
-				{new TranslationInfo{ Name="Spanish",  Code="es" }},
-				{new TranslationInfo{ Name="German",   Code="de" }},
-				{new TranslationInfo{ Name="French",   Code="fr" }},
-				{new TranslationInfo{ Name="Japanese", Code="ja" }},
-				{new TranslationInfo{ Name="Chinese",  Code="zh" }},
+				new TranslationInfo{ Name="Spanish",  Code="es" },
+				new TranslationInfo{ Name="German",   Code="de" },
+				new TranslationInfo{ Name="French",   Code="fr" },
+				new TranslationInfo{ Name="Japanese", Code="ja" },
+				new TranslationInfo{ Name="Chinese",  Code="zh" },
 
 				// probably obsolete forever. existed in 1402, gone in 1403
-				{new TranslationInfo{ Name="Mexican Spanish",  Code="es-mx" }},
-				{new TranslationInfo{ Name="Simplified Chinese",  Code="es-mx" }},
+				new TranslationInfo{ Name="Mexican Spanish",  Code="es-mx" },
+				new TranslationInfo{ Name="Simplified Chinese",  Code="es-mx" },
 			};
 	}
 
@@ -47,7 +47,8 @@ namespace Untrans
 	{
 		private class Options
 		{
-			public string BaseFilename { get; set; }
+			public string BasePath { get; set; }
+			public string IgnoreFilePath { get; set; }
 			public bool Report { get; set; }
 		}
 
@@ -59,13 +60,20 @@ namespace Untrans
 			var options = new Options
 			{
 				Report = false,
+				IgnoreFilePath = "./ignore.regx.txt",
 			};
-			var optionSet = new OptionSet()
+			var optionSet = new OptionSet
 			{
 				{
-					"path:", path =>
+					"p|path:", path =>
 					{
-						if (!String.IsNullOrWhiteSpace(path)) options.BaseFilename = path;
+						if (!String.IsNullOrWhiteSpace(path)) options.BasePath = path;
+					}
+				},
+				{
+					"i|ignore:", path =>
+					{
+						if (!String.IsNullOrWhiteSpace(path)) options.IgnoreFilePath = path;
 					}
 				},
 				{
@@ -83,7 +91,7 @@ namespace Untrans
 			};
 			optionSet.Parse(args);
 
-			if (showHelp || !args.Any() || options.BaseFilename == null)
+			if (showHelp || !args.Any() || options.BasePath == null)
 			{
 				var help = @" Untrans
 					| Show info about translation staleness or print list of untranlated strings in a porchlight build.
@@ -92,6 +100,7 @@ namespace Untrans
 					| --path=<directory containing PorchlightStrings.resx>
 
 					| Options:
+					| --ignore=<path to ignore file>. Default is ""ignore.regx.txt""
 					| --report-only Prints a translation report instead of listing untranslated strings
 					| "
 					.StripMargin();
@@ -101,21 +110,33 @@ namespace Untrans
 			}
 			#endregion
 
-			#region read / preen translations
-			// read in porchlight strings and translations
-			var porchlightStringsPath = options.BaseFilename + Config.EnglishFilename;
-			if (!File.Exists(porchlightStringsPath))
+			#region read ignore files
+			if (!File.Exists(options.IgnoreFilePath))
 			{
-				Console.WriteLine(String.Format("\"{0}\" not found. Is this the path to a release build?", porchlightStringsPath));
+				Console.WriteLine("Ignore file \"{0}\" not found.", options.IgnoreFilePath);
 				Environment.Exit(0);
 			}
-			var porchlightStrings = KeyedString.ReadFile<TranslateableString>(porchlightStringsPath);
+			var globalIgnore = new HashSet<String>(File.ReadAllLines(options.IgnoreFilePath)).Where(line => !String.IsNullOrEmpty(line));
+			#endregion
+
+			#region read / preen translations
+			// read in porchlight strings and translations
+			var porchlightStringsPath = options.BasePath + Config.EnglishFilename;
+			if (!File.Exists(porchlightStringsPath))
+			{
+				Console.WriteLine("\"{0}\" not found. Is this the path to a release build?", porchlightStringsPath);
+				Environment.Exit(0);
+			}
+			var rawPorchlightStrings = KeyedString.ReadFile<TranslateableString>(porchlightStringsPath);
+			var porchlightStrings = rawPorchlightStrings
+				.Where(kvp => !globalIgnore.Any(exp => Regex.IsMatch(kvp.Value.String, "^" + exp + "$")))
+				.ToDictionary();
 
 			var translations =
 				Config.Translations.Aggregate(new Dictionary<TranslationInfo, Dictionary<String, TranslatedString>>(),
 					(accumulator, translationinfo) =>
 					{
-						var translationDict = KeyedString.ReadFile<TranslatedString>(options.BaseFilename + translationinfo.Filename);
+						var translationDict = KeyedString.ReadFile<TranslatedString>(options.BasePath + translationinfo.Filename);
 						if (translationDict != null)
 						{
 							accumulator.Add(translationinfo, translationDict);
@@ -146,14 +167,14 @@ namespace Untrans
 
 			if (options.Report)
 			{
-				var translateable = porchlightStrings.Count;
-				Console.WriteLine("Total Translateable Strings: " + translateable);
+				Console.WriteLine("Total strings before filtering: " + rawPorchlightStrings.Count);
+				Console.WriteLine("Total translateable strings: " + porchlightStrings.Count);
 				Console.WriteLine();
 
 				Console.WriteLine("Untranslated: " + porchlightStrings.Count(s => !s.Value.Translated));
 				Console.WriteLine();
 
-				Console.WriteLine("Stale Keys:");
+				Console.WriteLine("Stale keys:");
 				foreach (var translation in translations.OrderBy(translationInfo => translationInfo.Key.Name))
 				{
 					var stale = translation.Value.Where(s => s.Value.Stale);

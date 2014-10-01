@@ -1,4 +1,6 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Retchelf
 {
@@ -9,5 +11,9 @@ namespace Retchelf
 			return Regex.Replace(s, @"([\r\n]+)\s*\|", "$1");
 		}
 
+		public static Dictionary<U, V> ToDictionary<U, V>(this IEnumerable<KeyValuePair<U, V>> e)
+		{
+			return e.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+		}
 	}
 }
